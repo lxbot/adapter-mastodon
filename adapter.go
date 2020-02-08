@@ -9,6 +9,7 @@ import (
 	"github.com/mattn/go-mastodon"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -16,6 +17,7 @@ type M = map[string]interface{}
 
 var ch *chan M
 var client *mastodon.Client
+var me *mastodon.Account
 
 func Boot(c *chan M) {
 	ch = c
@@ -32,6 +34,13 @@ func Boot(c *chan M) {
 		Server:      url,
 		AccessToken: token,
 	})
+
+	account, err := client.GetAccountCurrentUser(context.TODO())
+	if err != nil {
+		log.Fatalln("account fetch error:", err)
+	}
+	me = account
+
 	ws := client.NewWSClient()
 	go connect(ws)
 }
@@ -45,6 +54,9 @@ func Send(msg M) {
 
 	texts := split(m.Message.Text, 400)
 	inReplyToID := mastodon.ID("")
+	if msg["is_reply"] != nil && msg["is_reply"].(bool) {
+		inReplyToID = mastodon.ID(m.Message.ID)
+	}
 	for _, v := range texts {
 		status, err := client.PostStatus(context.TODO(), &mastodon.Toot{
 			Status:      v,
@@ -111,6 +123,16 @@ LOOP:
 }
 
 func onUpdate(status *mastodon.Status) {
+	isReply := false
+	text := html2text.HTML2Text(status.Content)
+	for _, v := range status.Mentions {
+		text = strings.ReplaceAll(text, me.URL, "")
+		if v.Acct == me.Acct {
+			isReply = true
+		}
+	}
+	text = strings.TrimSpace(text)
+
 	attachments := make([]M, len(status.MediaAttachments))
 	for i, v := range status.MediaAttachments {
 		attachments[i] = M{
@@ -131,9 +153,10 @@ func onUpdate(status *mastodon.Status) {
 		},
 		"message": M{
 			"id":          string(status.ID),
-			"text":        html2text.HTML2Text(status.Content),
+			"text":        text,
 			"attachments": attachments,
 		},
+		"is_reply": isReply,
 		"raw": status,
 	}
 }
