@@ -134,6 +134,11 @@ LOOP:
 }
 
 func onUpdate(status *mastodon.Status) {
+	if status.Account.Acct == me.Acct {
+		log.Println("own message, skipped")
+		return
+	}
+
 	isReply := false
 	text := html2text.HTML2Text(status.Content)
 	for _, v := range status.Mentions {
