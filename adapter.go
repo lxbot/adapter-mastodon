@@ -4,21 +4,31 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
-	"github.com/k3a/html2text"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/lxbot/lxlib"
 	"github.com/mattn/go-mastodon"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 )
 
-type M = map[string]interface{}
+type (
+	M = map[string]interface{}
+	EventType int
+)
+
+const (
+	UpdateEvent EventType = iota + 1
+	NotificationEvent
+)
 
 var ch *chan M
 var client *mastodon.Client
 var me *mastodon.Account
 var allowList []string
+var fullAcct string
 
 func Boot(c *chan M) {
 	ch = c
@@ -31,8 +41,8 @@ func Boot(c *chan M) {
 			log.Println("allow list: " + allowList[i])
 		}
 	}
-	url := os.Getenv("LXBOT_MASTODON_BASE_URL")
-	if url == "" {
+	u := os.Getenv("LXBOT_MASTODON_BASE_URL")
+	if u == "" {
 		log.Fatalln("invalid url:", "'LXBOT_MASTODON_BASE_URL' にAPI URLを設定してください")
 	}
 	token := os.Getenv("LXBOT_MASTODON_ACCESS_TOKEN")
@@ -40,7 +50,7 @@ func Boot(c *chan M) {
 		log.Fatalln("invalid token:", "'LXBOT_MASTODON_ACCESS_TOKEN' にアクセストークンを設定してください")
 	}
 	client = mastodon.NewClient(&mastodon.Config{
-		Server:      url,
+		Server:      u,
 		AccessToken: token,
 	})
 
@@ -49,6 +59,12 @@ func Boot(c *chan M) {
 		log.Fatalln("account fetch error:", err)
 	}
 	me = account
+
+	up, err := url.Parse(u)
+	if err != nil {
+		log.Fatalln("url parse error:", err)
+	}
+	fullAcct = "@" + me.Acct + "@" + up.Host
 
 	ws := client.NewWSClient()
 	go connect(ws)
@@ -122,7 +138,12 @@ LOOP:
 		case *mastodon.UpdateEvent:
 			ue := e.(*mastodon.UpdateEvent)
 			log.Println("onUpdateEvent: ", ue)
-			onUpdate(ue.Status)
+			onUpdate(UpdateEvent, ue.Status)
+			break
+		case *mastodon.NotificationEvent:
+			ne := e.(*mastodon.NotificationEvent)
+			log.Println("onNotificationEvent: ", ne)
+			onUpdate(NotificationEvent, ne.Notification.Status)
 			break
 		case *mastodon.ErrorEvent:
 			break LOOP
@@ -133,21 +154,29 @@ LOOP:
 	go connect(client)
 }
 
-func onUpdate(status *mastodon.Status) {
+func onUpdate(event EventType, status *mastodon.Status) {
 	if status.Account.Acct == me.Acct {
 		log.Println("own message, skipped")
 		return
 	}
 
 	isReply := false
-	text := html2text.HTML2Text(status.Content)
+	text := html2text(status.Content)
 	for _, v := range status.Mentions {
 		text = strings.ReplaceAll(text, me.URL, "")
+		text = strings.ReplaceAll(text, fullAcct, "")
+		text = strings.ReplaceAll(text, "@" + me.Acct, "")
 		if v.Acct == me.Acct {
 			isReply = true
 		}
 	}
+	if event == UpdateEvent && isReply {
+		log.Println("this event should be process with NotificationEvent")
+		return
+	}
+
 	text = strings.TrimSpace(text)
+	log.Println(text)
 
 	if len(allowList) != 0 {
 		for _, acct := range allowList {
@@ -207,6 +236,21 @@ PROCESS:
 		"is_reply": isReply,
 		"raw": status,
 	}
+}
+
+func html2text(s string) string {
+	log.Println("raw:", s)
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(s))
+	if err != nil {
+		log.Println(err)
+		return s
+	}
+	doc.Find("br").Each(func(i int, selection *goquery.Selection) {
+		selection.SetText("\n")
+	})
+	text := doc.Text()
+	log.Println("html2text:", text)
+	return text
 }
 
 func split(s string, n int) []string {
