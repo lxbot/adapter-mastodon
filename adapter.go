@@ -18,10 +18,19 @@ type M = map[string]interface{}
 var ch *chan M
 var client *mastodon.Client
 var me *mastodon.Account
+var allowList []string
 
 func Boot(c *chan M) {
 	ch = c
 	gob.Register(mastodon.Status{})
+	al := os.Getenv("LXBOT_MASTODON_ALLOW_LIST")
+	if al != "" {
+		allowList = strings.Split(al, ",")
+		for i, acct := range allowList {
+			allowList[i] = strings.TrimSpace(acct)
+			log.Println("allow list: " + allowList[i])
+		}
+	}
 	url := os.Getenv("LXBOT_MASTODON_BASE_URL")
 	if url == "" {
 		log.Fatalln("invalid url:", "'LXBOT_MASTODON_BASE_URL' にAPI URLを設定してください")
@@ -108,9 +117,11 @@ func connect(client *mastodon.WSClient) {
 LOOP:
 	for {
 		e := <-event
+		log.Println("onEvent: ", e)
 		switch e.(type) {
 		case *mastodon.UpdateEvent:
 			ue := e.(*mastodon.UpdateEvent)
+			log.Println("onUpdateEvent: ", ue)
 			onUpdate(ue.Status)
 			break
 		case *mastodon.ErrorEvent:
@@ -133,6 +144,38 @@ func onUpdate(status *mastodon.Status) {
 	}
 	text = strings.TrimSpace(text)
 
+	if len(allowList) != 0 {
+		for _, acct := range allowList {
+			if acct == status.Account.Acct {
+				log.Println("allow: ", status.Account.Acct)
+				goto PROCESS
+			}
+		}
+		log.Println("deny: ", status.Account.Acct)
+		if isReply {
+			Reply(M{
+				"user": M{
+					"id":   status.Account.Acct,
+					"name": status.Account.DisplayName,
+				},
+				"room": M{
+					"id":          "mastodon",
+					"name":        "mastodon",
+					"description": "mastodon",
+				},
+				"message": M{
+					"id":          string(status.ID),
+					"text":        "このbotは許可リストが設定されています。あなたのアカウントは許可リストに含まれていません。",
+					"attachments": []M{},
+				},
+				"is_reply": isReply,
+				"raw": status,
+			})
+		}
+		return
+	}
+
+PROCESS:
 	attachments := make([]M, len(status.MediaAttachments))
 	for i, v := range status.MediaAttachments {
 		attachments[i] = M{
