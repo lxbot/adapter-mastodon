@@ -175,9 +175,6 @@ func onUpdate(event EventType, status *mastodon.Status) {
 		return
 	}
 
-	text = strings.TrimSpace(text)
-	log.Println(text)
-
 	if len(allowList) != 0 {
 		for _, acct := range allowList {
 			if acct == status.Account.Acct {
@@ -230,7 +227,7 @@ PROCESS:
 		},
 		"message": M{
 			"id":          string(status.ID),
-			"text":        text,
+			"text":        strings.TrimSpace(text),
 			"attachments": attachments,
 		},
 		"is_reply": isReply,
