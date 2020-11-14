@@ -10,6 +10,8 @@ github.com/k3a/html2text v0.0.0-20191003111652-62431c4a3ba5 h1:XPj6fprl0AnuZdGEV
 github.com/k3a/html2text v0.0.0-20191003111652-62431c4a3ba5/go.mod h1:hLsxyJxi0xFnZniqnzx3GX5pzgtoFI16JChTgWD+Rmk=
 github.com/lxbot/lxlib v1.2.0 h1:pLSmLwT9ovmt8ar54TP5fpq7p+Ukk5zDMWT4DrQkkR0=
 github.com/lxbot/lxlib v1.2.0/go.mod h1:CWdH07CivQhRYwLNNCD50pR2fvTDfa+xkIUPzzN0mrc=
+github.com/lxbot/lxlib v1.3.0 h1:kTMdluxNgBK+u0oBP3ACzsnhiU0ijKsbfKXTwp2PQek=
+github.com/lxbot/lxlib v1.3.0/go.mod h1:CWdH07CivQhRYwLNNCD50pR2fvTDfa+xkIUPzzN0mrc=
 github.com/mattn/go-colorable v0.1.1/go.mod h1:FuOcm+DKB9mbwrcAfNl7/TZVBZ6rcnceauSikq3lYCQ=
 github.com/mattn/go-isatty v0.0.5/go.mod h1:Iq45c/XA43vh69/j3iqttzPXn0bhXyGjM0Hdxcsrc5s=
 github.com/mattn/go-isatty v0.0.7/go.mod h1:Iq45c/XA43vh69/j3iqttzPXn0bhXyGjM0Hdxcsrc5s=
