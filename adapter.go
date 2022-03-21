@@ -14,6 +14,7 @@ import (
 	"github.com/lxbot/lxlib/v2/common"
 	"github.com/lxbot/lxlib/v2/lxtypes"
 	"github.com/mattn/go-mastodon"
+	"github.com/mitchellh/mapstructure"
 )
 
 type (
@@ -88,16 +89,23 @@ func listen() {
 func send(message *lxtypes.Message) {
 	prefix := ""
 	inReplyToID := mastodon.ID("")
+	common.DebugLog("mode:", message.Mode)
 	if message.Mode == lxtypes.ReplyMode {
 		inReplyToID = mastodon.ID(message.Room.ID)
 		prefix = "@" + message.User.ID + " "
+		common.DebugLog("prefix:", prefix)
 	}
 
 	visibility := "unlisted"
 	if message.Raw != nil {
-		originalMessage := message.Raw.(*mastodon.Status)
-		if originalMessage.Visibility != "public" {
-			visibility = originalMessage.Visibility
+		raw := message.Raw.(map[string]interface{})
+		status := new(mastodon.Status)
+		if err := mapstructure.WeakDecode(raw, status); err != nil {
+			common.ErrorLog(err)
+			return
+		}
+		if status.Visibility != "public" {
+			visibility = status.Visibility
 		}
 	}
 
@@ -105,16 +113,19 @@ func send(message *lxtypes.Message) {
 		texts := split(content.Text, 400)
 
 		for _, text := range texts {
+			body := prefix + text
 			toot := &mastodon.Toot{
-				Status:      prefix + text,
+				Status:      body,
 				InReplyToID: inReplyToID,
 				Visibility:  visibility,
 			}
+			common.DebugLog("visibility:", visibility, "toot:", body)
 			status, err := client.PostStatus(context.TODO(), toot)
 			if err != nil {
 				common.ErrorLog(err)
 				return
 			}
+			common.DebugLog("status:", status)
 			inReplyToID = status.ID
 		}
 	}
@@ -201,7 +212,8 @@ func onUpdate(event EventType, status *mastodon.Status) {
 						Attachments: make([]lxtypes.Attachment, 0),
 					},
 				},
-				Raw: nil,
+				Mode: lxtypes.ReplyMode,
+				Raw:  nil,
 			})
 		}
 		return
